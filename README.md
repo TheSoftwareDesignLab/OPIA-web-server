@@ -2,7 +2,7 @@ Hello!
 
 This is Opia Server
 
-To run the server run on the terminal:
+To run the server, open your terminal on the project's folder and execute this commands:
 
 1. source bin/activate
 2. cd app
