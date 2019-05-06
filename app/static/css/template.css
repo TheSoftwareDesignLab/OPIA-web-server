@@ -1,4 +1,4 @@
-#tables {
+#tables , #logs {
   font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
   border-collapse: collapse;
   width: 100%;
@@ -8,16 +8,18 @@ h2, h3{
   font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
 }
 
-#tables td, #tables th {
+#tables td, #tables th, #logs td, #logs th {
   border: 1px solid #ddd;
   padding: 8px;
 }
 
 #tables tr:nth-child(even){background-color: #f2f2f2;}
+#logs tr:nth-child(even){background-color: #f2f2f2;}
 
 #tables tr:hover {background-color: #ddd;}
+#logs tr:hover {background-color: #ddd;}
 
-#tables th {
+#tables th, #logs th {
   padding-top: 12px;
   padding-bottom: 12px;
   text-align: left;
