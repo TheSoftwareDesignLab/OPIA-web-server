@@ -14,10 +14,10 @@ h2, h3{
 }
 
 #tables tr:nth-child(even){background-color: #f2f2f2;}
-#logs tr:nth-child(even){background-color: #f2f2f2;}
+/*#logs tr:nth-child(even){background-color: #f2f2f2;}*/
 
 #tables tr:hover {background-color: #ddd;}
-#logs tr:hover {background-color: #ddd;}
+/*#logs tr:hover {background-color: #ddd;}*/
 
 #tables th, #logs th {
   padding-top: 12px;
@@ -25,4 +25,8 @@ h2, h3{
   text-align: left;
   background-color: #006494;
   color: white;
+}
+
+.errorFile {
+  background-color: #ED7B7D
 }

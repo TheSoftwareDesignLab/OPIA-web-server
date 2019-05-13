@@ -3,6 +3,7 @@ import os
 import time
 import json
 import subprocess
+from subprocess import check_output
 
 app = Flask(__name__)
 
@@ -12,6 +13,7 @@ infoTables = []
 schemasTables = []
 packageSelected = ''
 filteredLogcat = []
+filteredActivity = []
 packageLogcat = ''
 
 @app.route('/')
@@ -28,12 +30,21 @@ def show_databases():
 	return displayData()
 
 @app.route('/log/<package>')
-def show_logcat(package):
-	return displayLogcat(package)
+def get_logcat(package):
+	return getLogcat(package)
 
-@app.route('/stop/<package>')
-def stop_app(package):
-	return stopStart(package)
+@app.route('/logcat/<package>')
+def show_logcat(package):
+	return displayLogcatTable(package)
+
+@app.route('/clear/')
+def clear():
+	return clearLogcat()
+
+@app.route('/clearvar/')
+def clear_var():
+	return clearVar()
+
 
 # function that filters databases by termination (excluding .db-journal)
 def filterDatabases(databases):
@@ -56,16 +67,16 @@ def readDatabases(packageName):
 	#packageName = 'com.azwstudios.theholybible.em'
 
 	#getting backup from app on device
-	b = subprocess.Popen('adb backup -noapk ' + packageName, stdout=subprocess.PIPE, shell=True)
-	b_status = b.wait()
+	#b = subprocess.Popen('adb backup -noapk ' + packageName, stdout=subprocess.PIPE, shell=True)
+	#b_status = b.wait()
 
 	#unpack backup
-	t = subprocess.Popen('java -jar abe.jar unpack backup.ab backup.tar', stdout=subprocess.PIPE, shell=True)
-	t_status = t.wait()
+	#t = subprocess.Popen('java -jar abe.jar unpack backup.ab backup.tar', stdout=subprocess.PIPE, shell=True)
+	#t_status = t.wait()
 
 	#extract .tar
-	t1 = subprocess.Popen('tar -xvf backup.tar', stdout=subprocess.PIPE, shell=True)
-	t1_status = t1.wait()
+	#t1 = subprocess.Popen('tar -xvf backup.tar', stdout=subprocess.PIPE, shell=True)
+	#t1_status = t1.wait()
 
 	path = 'apps/'+packageName+'/db/'
 	#read databases
@@ -78,7 +89,6 @@ def readDatabases(packageName):
 	filteredDatabases = filterDatabases(arr)
 
 	#get tables from all databases
-	#cuando hago select tengo que estar dentro de la bd? siii
 
 	listTables = []
 
@@ -132,12 +142,14 @@ def displayData():
 	return strHtml
 
 
-def displayLogcat(package):
+def getLogcat(package):
 
 	global packageLogcat
 	global filteredLogcat
+	global filteredActivity
 	if(package != packageLogcat):
 		filteredLogcat = []
+		filteredActivity = []
 		packageLogcat = package
 
 	dictionary = {
@@ -181,52 +193,201 @@ def displayLogcat(package):
 		'Response:' : 'Response',
 		'WifiTrafficPoller:' : 'WifiTrafficPoller',
 		'AlarmManager:' : 'AlarmManager',
-		'PowerManagerService:' : 'PowerManagerService'
+		'PowerManagerService:' : 'PowerManagerService',
+		'WifiStateMachine:' : 'WifiStateMachine',
+		'AALService:' : 'AALService',
+		'MNLD' : 'MNLD',
+		'gps_mtk' : 'gps_mtk',
+		'mnl_linux:' : 'mnl_linux',
+		'AEE/AED' : 'AEE/AED',
+		'AEE/LIBAEE:' : 'AEE/LIBAEE',
+		'AppOps' : 'AppOps',
+		'InputReader:' : 'InputReader',
+		'BufferQueue:' : 'BufferQueue',
+		'BufferQueueDump:' : 'BufferQueueDump',
+		'BufferQueueConsumer:' : 'BufferQueueConsumer',
+		'PhoneStatusBar:' : 'PhoneStatusBar',
+		'AccountManagerService:' : 'AccountManagerService',
+		'dex2oat' : 'dex2oat',
+		'wpa_supplicant:' : 'wpa_supplicant',
+		'WifiManager:' : 'WifiManager',
+		'WifiConfigStore:' : 'WifiConfigStore',
+		'WifiWatchdogStateMachine:' : 'WifiWatchdogStateMachine',
+		'BluetoothManagerService:' : 'BluetoothManagerService',
+		'PerfService:' : 'PerfService',
+		'GasService:' : 'GasService',
+		'ClClient:' : 'ClClient',
+		'thermal_repeater:' : 'thermal_repeater',
+		'AES' : 'AES',
+		'SignalClusterView:' : 'SignalClusterView',
+		'AALLightSensor:' : 'AALLightSensor',
+		'NetworkTypeUtils:' : 'NetworkTypeUtils',
+		'DefaultStatusBarPlmnPlugin:' : 'DefaultStatusBarPlmnPlugin',
+		'ConnectivityService:' : 'ConnectivityService',
+		'WindowManager:' : 'WindowManager',
+		'DisplayPowerController:' : 'DisplayPowerController',
+		'NetworkStats:' : 'NetworkStats',
+		'PackageManager:' : 'PackageManager',
+		'DisplayPowerController:' : 'DisplayPowerController',
+		'NetworkIdentity:' : 'NetworkIdentity',
+		'BatteryController:' : 'BatteryController',
+		'KeyguardUpdateMonitor:' : 'KeyguardUpdateMonitor',
+		'GpsLocationProvider:' : 'GpsLocationProvider',
+		'LocationManagerService:' : 'LocationManagerService',
+		'MtkLocationExt:' : 'MtkLocationExt',
+		'UpdateSP:' : 'UpdateSP',
+		'SensorService:' : 'SensorService',
+		'Sensors' : 'Sensors',
+		'Accel' : 'Accel',
+		'DetectedActivitiesIntentService:' : 'DetectedActivitiesIntentService',
+		'PowerManagerNotifier:' : 'PowerManagerNotifier',
+		'NetlinkSocketObserver:' : 'NetlinkSocketObserver',
+		'InputMethodManagerService:' : 'InputMethodManagerService',
+		'GCoreUlr:' : 'GCoreUlr',
+		'BeaconBle:' : 'BeaconBle',
+		'BluetoothAdapter:' : 'BluetoothAdapter',
+		'BtGatt.GattService:' : 'BtGatt.GattService',
+		'BtGatt.ScanManager:' : 'BtGatt.ScanManager',
+		'BluetoothLeScanner:' : 'BluetoothLeScanner',
+		'bt_hci' : 'bt_hci',
+		'EventNotificationJob:' : 'EventNotificationJob',
+		'DhcpStateMachine:' : 'DhcpStateMachine',
+		'DhcpUtils:' : 'DhcpUtils',
+		'NetUtils:' : 'NetUtils',
+		'GCoreUlr:' : 'GCoreUlr',
+		'LatinIME:' : 'LatinIME',
+		'NotificationService:' : 'NotificationService',
+		'StatusBar:' : 'StatusBar',
+		'SampleRate:' : 'SampleRate',
+		'SQLOpenLite:' : 'SQLOpenLite',
+		'mnld' : 'mnld',
+		'agps' : 'agps',
+		'GsmCellLocation:' : 'GsmCellLocation',
+		'nlp_service:' : 'nlp_service',
+		'WifiHAL' : 'WifiHAL',
+		'WifiController:' : 'WifiController',
+		'WifiService:' : 'WifiService',
+		'WifiMonitor:' : 'WifiMonitor',
+		'CellLocation:' : 'CellLocation:',
+		'NVRAM' : 'NVRAM',
+		'SocketClient:' : 'SocketClient',
+		'Tethering:' : 'Tethering',
+		'WifiNative-wlan0:' : 'WifiNative-wlan0',
+		'WifiAutoJoinController' : 'WifiAutoJoinController',
+		'FrameworkListener:' : 'FrameworkListener',
+		'NetworkStatsRecorder:' : 'NetworkStatsRecorder',
+		'DatabaseProcessor:' : 'DatabaseProcessor',
+		'NetworkPolicy:' : 'NetworkPolicy',
+		'LocationService:' : 'LocationService',
+		'GPSDatabase:' : 'GPSDatabase',
+		'Firebase:' : 'Firebase',
+		'PhoneInterfaceManager:' : 'PhoneInterfaceManager',
+		'wifi2agps:' : 'wifi2agps',
+		'Netd' : 'Netd',
+		'NetdConnector:' : 'NetdConnector',
+		'NetworkManagement:' : 'NetworkManagement',
+		'WifiNotificationController:' : 'WifiNotificationController',
+		'AdaptiveDiscoveryWorker:' : 'AdaptiveDiscoveryWorker',
+		'BatteryService:' : 'BatteryService',
+		'Authzen' : 'Authzen',
+		'SettingsProvider:' : 'SettingsProvider',
+		'Telecom' : 'Telecom',
+		'Watchdog:' : 'Watchdog',
+		'WindowStateAnimator:' : 'WindowStateAnimator',
+		'MediaPlayerService:' : 'MediaPlayerService',
+		'ProcessCpuTracker:' : 'ProcessCpuTracker',
+		'WallpaperService:' : 'WallpaperService',
+		'ImageWallpaper:' : 'ImageWallpaper',
+		'DHCPv6' : 'DHCPv6',
+		'View' : 'View',
+		'ContactsProvider:' : 'ContactsProvider',
+		'GraphicsStats:' : 'GraphicsStats',
+		'LatinIME:LogUtils:' : 'LatinIME:LogUtils',
+		'CastDatabase:' : 'CastDatabase',
+		'SQLiteCastStore:' : 'SQLiteCastStore',
+		'WorkSourceUtil:' : 'WorkSourceUtil',
+		'MPlugin' : 'MPlugin',
+		'PrimesInit:' : 'PrimesInit',
+		'Primes' : 'Primes',
+		'PrimesTesting:' : 'PrimesTesting',
+		'DisplayManagerService:' : 'DisplayManagerService',
+		'MtkOmxVenc:' : 'MtkOmxVenc',
+		'VDO_LOG' : 'VDO_LOG',
+		'ACodec' : 'ACodec',
+		'MtkOmxCore:' : 'MtkOmxCore',
+		'OMXNodeInstance:' :'OMXNodeInstance'
 	}
+
+	
+	activityOutput = check_output(['adb', 'shell', 'dumpsys', 'window', 'windows', '|', 'grep', '-E', "'mCurrentFocus'" ]).decode('ISO-8859-1')
+
+
+
+	activitySplitted = activityOutput.split(' ')
+	activityName = activitySplitted[len(activitySplitted)-1].replace('}','')
 
 	commandProcess = 'adb shell ps | grep ' + package
 	processNumber = os.popen(commandProcess).read().split()[1]
-	command = 'adb logcat -d | grep -F '+ processNumber
-	logcatProcess = os.popen(command).read().split('\n')
+	ans = check_output(['adb', 'logcat', '-d','|', 'grep', '-F', processNumber]).decode('ISO-8859-1')
+	logcatProcess = ans.split('\n')
+
 	for i in range(0, len(logcatProcess)):
 		line = logcatProcess[i]
+
 		current = line.split()
 
 		if(len(current) > 4):
-			tag = current[5]
+
+			tag = current[5]			
 			if(dictionary.get(tag) == None):
 				if(line not in filteredLogcat):
-					filteredLogcat.append(line)
+					if('[OkHttp]' not in line and '[CDS]' not in line): 
+						filteredLogcat.append(line)
+						filteredActivity.append(activityName)
 
-			
+	if('Application Error:' in activityOutput):
+		#ENCONTRO EL ERROR, AHORA REINICIE
+		return stopStart(package)
 
-	return displayLogTable(filteredLogcat)
+	return 'OK'
 
-def displayLogTable(filtered):
+def displayLogcatTable(package):
 
+	global filteredLogcat
+	global filteredActivity
 
 	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Logcat</h2>'
-	strHtml = strHtml + '<table id="logs"><tr><th>Date</th><th>Priority</th><th>Message</th></tr>'
+	strHtml = strHtml + '<table id="logs"><tr><th>Date</th><th>Priority</th><th>Activity</th><th>Message</th></tr>'
 
-	for i in range(0, len(filtered)):
-		strHtml = strHtml + '<tr>'
-		currentLine = filtered[i]
-		splitted = currentLine.split()
+	if(packageLogcat == package): 
 
-		strHtml = strHtml + '<td>'
-		strHtml = strHtml + splitted[0] + ' ' + splitted[1]
-		strHtml = strHtml + '</td>'
+		for i in range(0, len(filteredLogcat)):
 
-		strHtml = strHtml + '<td>'
-		strHtml = strHtml + splitted[4] 
-		strHtml = strHtml + '</td>'
+			if('AndroidRuntime' in filteredLogcat[i]):
+				strHtml = strHtml + '<tr class="errorFile">'
+			else:
+				strHtml = strHtml + '<tr>'
+			
+			currentLine = filteredLogcat[i]
+			splitted = currentLine.split()
 
-		strHtml = strHtml + '<td>'
-		strHtml = strHtml + ' '.join(splitted[5:]) 
-		strHtml = strHtml + '</td>'
+			strHtml = strHtml + '<td>'
+			strHtml = strHtml + splitted[0] + ' ' + splitted[1]
+			strHtml = strHtml + '</td>'
 
-		strHtml = strHtml + '</tr>'
+			strHtml = strHtml + '<td>'
+			strHtml = strHtml + splitted[4] 
+			strHtml = strHtml + '</td>'
 
+			strHtml = strHtml + '<td>'
+			strHtml = strHtml + filteredActivity[i]
+			strHtml = strHtml + '</td>'
+
+			strHtml = strHtml + '<td>'
+			strHtml = strHtml + ' '.join(splitted[5:]) 
+			strHtml = strHtml + '</td>'
+
+			strHtml = strHtml + '</tr>'
 
 	strHtml = strHtml + '</table></body></html>'
 
@@ -244,10 +405,25 @@ def stopStart(packageStop):
 	c = subprocess.Popen(adbStart, stdout=subprocess.PIPE, shell=True)
 	c_status = c.wait()
 
-	return 'Stop and Start'
+	return 'CRASH'
 
 
+def clearLogcat():
+	adb = 'adb logcat -c'
+	b = subprocess.Popen(adb, stdout=subprocess.PIPE, shell=True)
+	b_status = b.wait()
 
+	return 'Logcat cleared'
+
+def clearVar():
+
+	global filteredLogcat
+	global filteredActivity
+
+	filteredLogcat = []
+	filteredActivity = []
+
+	return 'Cleared'
 
 
 if __name__ == '__main__':
