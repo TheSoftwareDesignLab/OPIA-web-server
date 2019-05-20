@@ -3,50 +3,63 @@ import os
 import time
 import json
 import subprocess
+import logDictionary
 from subprocess import check_output
 
 app = Flask(__name__)
+
+################### variables ###################
 
 allDatabases = []
 allTables = []
 infoTables = []
 schemasTables = []
+
 packageSelected = ''
+packageLogcat = ''
+
 filteredLogcat = []
 filteredActivity = []
-packageLogcat = ''
+
+################### routes ###################
 
 @app.route('/')
 def main():
     return render_template('home.html')
 
+#read the databases of a given package
 @app.route('/app/<package>')
 def show_package(package):
-	
 	return readDatabases(package)
 
-@app.route('/package/')
-def show_databases():
+#display the databases of the package
+@app.route('/databases/<package>')
+def show_databases(package):
 	return displayData()
 
+#read the logcat of the given package
 @app.route('/log/<package>')
 def get_logcat(package):
 	return getLogcat(package)
 
+#display the logcat of the given package
 @app.route('/logcat/<package>')
 def show_logcat(package):
 	return displayLogcatTable(package)
 
+#clear the logcat on the device
 @app.route('/clear/')
 def clear():
 	return clearLogcat()
 
+#clear the variables on the server
 @app.route('/clearvar/')
 def clear_var():
 	return clearVar()
 
+################### database methods ###################
 
-# function that filters databases by termination (excluding .db-journal)
+# filters databases by termination, i.e it reads the file with termination .db (excluding .db-journal)
 def filterDatabases(databases):
 
 	newDatabases = []
@@ -60,39 +73,49 @@ def filterDatabases(databases):
 
 	return newDatabases
 
+# Gets the databases from the device by creating a backup. 
+# It returns a list of tables but saves also the data from the tables.
 def readDatabases(packageName):
+
+	global allDatabases
+	global allTables
+	global infoTables
+
+	allDatabases = []
+	allTables = []
+	infoTables = []
 
 	packageSelected = packageName
 	print(packageSelected)
-	#packageName = 'com.azwstudios.theholybible.em'
 
 	#getting backup from app on device
-	#b = subprocess.Popen('adb backup -noapk ' + packageName, stdout=subprocess.PIPE, shell=True)
-	#b_status = b.wait()
+	b = subprocess.Popen('adb backup -noapk ' + packageName, stdout=subprocess.PIPE, shell=True)
+	b_status = b.wait()
 
 	#unpack backup
-	#t = subprocess.Popen('java -jar abe.jar unpack backup.ab backup.tar', stdout=subprocess.PIPE, shell=True)
-	#t_status = t.wait()
+	t = subprocess.Popen('java -jar abe.jar unpack backup.ab backup.tar', stdout=subprocess.PIPE, shell=True)
+	t_status = t.wait()
 
 	#extract .tar
-	#t1 = subprocess.Popen('tar -xvf backup.tar', stdout=subprocess.PIPE, shell=True)
-	#t1_status = t1.wait()
+	t1 = subprocess.Popen('tar -xvf backup.tar', stdout=subprocess.PIPE, shell=True)
+	t1_status = t1.wait()
 
 	path = 'apps/'+packageName+'/db/'
+
 	#read databases
 	ans = os.popen('ls '+path).read()
 
 	#list databases
 	arr = ans.split()
 
-	#databases not journals
+	#gets databases not journals
 	filteredDatabases = filterDatabases(arr)
 
-	#get tables from all databases
-
-	listTables = []
+	#gets tables from all databases
 
 	for i in range(0, len(filteredDatabases)):
+
+		#access the databases using sqlite3
 		dbPath = 'sqlite3 ' + path+filteredDatabases[i] + ' ".tables"'
 
 		tables = os.popen(dbPath).read().split()
@@ -101,15 +124,16 @@ def readDatabases(packageName):
 
 		allDatabases.extend(a)
 		allTables.extend(tables)
-		listTables.extend(tables)
-		print(allTables)
 
 	print(allTables)
 	for i in range(0, len(allTables)):
+		#gets all the information stored on each table
 		readTable(allTables[i], allDatabases[i], path)
 
-	return json.dumps(listTables)
+	return json.dumps(allTables)
 
+# Gets all the information stores on each table given the table name, database and the path to the file.
+# It saves all the info in global variables as a html string to display on tables
 def readTable(tableName, databaseName, path):
 
 	headers = ' ".headers on"'
@@ -119,7 +143,8 @@ def readTable(tableName, databaseName, path):
 	tableContent = os.popen(tableCommand).read()
 	infoTables.append(tableContent)
 
-
+#Creates an html file with all the tables and its information.
+#Returns the html 
 def displayData():
 
 	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Tables</h2>'
@@ -141,7 +166,10 @@ def displayData():
 
 	return strHtml
 
+################### logcat methods ###################
 
+# Gets the logcat and filters it by the package given. Also it filters the logcat with a dictionary to leave only developer's logs
+# It returns OK if the logcat was extracted successfully and CRASH if the app crashed.
 def getLogcat(package):
 
 	global packageLogcat
@@ -152,185 +180,29 @@ def getLogcat(package):
 		filteredActivity = []
 		packageLogcat = package
 
-	dictionary = {
-		'memtrack_graphic:' : 'memtrack_graphic',
-		'BufferQueueProducer:' : 'BufferQueueProducer',
-		'SettingsInterface:' : 'SettingsInterface',
-		'PerfServiceManager:' : 'PerfServiceManager',
-		'ActivityManager:' : 'ActivityManager',
-		'libPerfService:' : 'libPerfService',
-		'ActivityThread:' : 'ActivityThread',
-		'art' : 'art',
-		'System' : 'System',
-		'WindowClient:' : 'WindowClient',
-		'PhoneWindow:' : 'PhoneWindow',
-		'InstantRun:' : 'InstantRun',
-		'OpenGLRenderer:' : 'OpenGLRenderer',
-		'InputMethodManager:' : 'InputMethodManager',
-		'GraphicBuffer:' : 'GraphicBuffer',
-		'ProgramBinary/Service:' : 'ProgramBinary/Service',
-		'libEGL' : 'libEGL',
-		'ViewRootImpl:' : 'ViewRootImpl',
-		'mali_winsys:' : 'mali_winsys',
-		'MultiWindowProxy:' : 'MultiWindowProxy',
-		'SurfaceFlinger:' : 'SurfaceFlinger',
-		'[MALI][Gralloc]:' : '[MALI][Gralloc]',
-		'Surface' : 'Surface',
-		'DynamiteModule:' : 'DynamiteModule',
-		'BiChannelGoogleApi:' : 'BiChannelGoogleApi',
-		'FirebaseAuth:' : 'FirebaseAuth',
-		'FirebaseInitProvider:' : 'FirebaseInitProvider',
-		'OpenSSLLib:' : 'OpenSSLLib',
-		'com.newrelic.android:' : 'com.newrelic.android',
-		'libc-netbsd:' : 'libc-netbsd',
-		'NativeCrypto:' : 'NativeCrypto',
-		'FA' : 'FA',
-		'Posix' : 'Posix',
-		'SQLiteDatabase:' : 'SQLiteDatabase',
-		'Choreographer:': 'Choreographer',
-		'WifiHW' : 'WifiHW',
-		'FirebaseApp:' : 'FirebaseApp',
-		'Response:' : 'Response',
-		'WifiTrafficPoller:' : 'WifiTrafficPoller',
-		'AlarmManager:' : 'AlarmManager',
-		'PowerManagerService:' : 'PowerManagerService',
-		'WifiStateMachine:' : 'WifiStateMachine',
-		'AALService:' : 'AALService',
-		'MNLD' : 'MNLD',
-		'gps_mtk' : 'gps_mtk',
-		'mnl_linux:' : 'mnl_linux',
-		'AEE/AED' : 'AEE/AED',
-		'AEE/LIBAEE:' : 'AEE/LIBAEE',
-		'AppOps' : 'AppOps',
-		'InputReader:' : 'InputReader',
-		'BufferQueue:' : 'BufferQueue',
-		'BufferQueueDump:' : 'BufferQueueDump',
-		'BufferQueueConsumer:' : 'BufferQueueConsumer',
-		'PhoneStatusBar:' : 'PhoneStatusBar',
-		'AccountManagerService:' : 'AccountManagerService',
-		'dex2oat' : 'dex2oat',
-		'wpa_supplicant:' : 'wpa_supplicant',
-		'WifiManager:' : 'WifiManager',
-		'WifiConfigStore:' : 'WifiConfigStore',
-		'WifiWatchdogStateMachine:' : 'WifiWatchdogStateMachine',
-		'BluetoothManagerService:' : 'BluetoothManagerService',
-		'PerfService:' : 'PerfService',
-		'GasService:' : 'GasService',
-		'ClClient:' : 'ClClient',
-		'thermal_repeater:' : 'thermal_repeater',
-		'AES' : 'AES',
-		'SignalClusterView:' : 'SignalClusterView',
-		'AALLightSensor:' : 'AALLightSensor',
-		'NetworkTypeUtils:' : 'NetworkTypeUtils',
-		'DefaultStatusBarPlmnPlugin:' : 'DefaultStatusBarPlmnPlugin',
-		'ConnectivityService:' : 'ConnectivityService',
-		'WindowManager:' : 'WindowManager',
-		'DisplayPowerController:' : 'DisplayPowerController',
-		'NetworkStats:' : 'NetworkStats',
-		'PackageManager:' : 'PackageManager',
-		'DisplayPowerController:' : 'DisplayPowerController',
-		'NetworkIdentity:' : 'NetworkIdentity',
-		'BatteryController:' : 'BatteryController',
-		'KeyguardUpdateMonitor:' : 'KeyguardUpdateMonitor',
-		'GpsLocationProvider:' : 'GpsLocationProvider',
-		'LocationManagerService:' : 'LocationManagerService',
-		'MtkLocationExt:' : 'MtkLocationExt',
-		'UpdateSP:' : 'UpdateSP',
-		'SensorService:' : 'SensorService',
-		'Sensors' : 'Sensors',
-		'Accel' : 'Accel',
-		'DetectedActivitiesIntentService:' : 'DetectedActivitiesIntentService',
-		'PowerManagerNotifier:' : 'PowerManagerNotifier',
-		'NetlinkSocketObserver:' : 'NetlinkSocketObserver',
-		'InputMethodManagerService:' : 'InputMethodManagerService',
-		'GCoreUlr:' : 'GCoreUlr',
-		'BeaconBle:' : 'BeaconBle',
-		'BluetoothAdapter:' : 'BluetoothAdapter',
-		'BtGatt.GattService:' : 'BtGatt.GattService',
-		'BtGatt.ScanManager:' : 'BtGatt.ScanManager',
-		'BluetoothLeScanner:' : 'BluetoothLeScanner',
-		'bt_hci' : 'bt_hci',
-		'EventNotificationJob:' : 'EventNotificationJob',
-		'DhcpStateMachine:' : 'DhcpStateMachine',
-		'DhcpUtils:' : 'DhcpUtils',
-		'NetUtils:' : 'NetUtils',
-		'GCoreUlr:' : 'GCoreUlr',
-		'LatinIME:' : 'LatinIME',
-		'NotificationService:' : 'NotificationService',
-		'StatusBar:' : 'StatusBar',
-		'SampleRate:' : 'SampleRate',
-		'SQLOpenLite:' : 'SQLOpenLite',
-		'mnld' : 'mnld',
-		'agps' : 'agps',
-		'GsmCellLocation:' : 'GsmCellLocation',
-		'nlp_service:' : 'nlp_service',
-		'WifiHAL' : 'WifiHAL',
-		'WifiController:' : 'WifiController',
-		'WifiService:' : 'WifiService',
-		'WifiMonitor:' : 'WifiMonitor',
-		'CellLocation:' : 'CellLocation:',
-		'NVRAM' : 'NVRAM',
-		'SocketClient:' : 'SocketClient',
-		'Tethering:' : 'Tethering',
-		'WifiNative-wlan0:' : 'WifiNative-wlan0',
-		'WifiAutoJoinController' : 'WifiAutoJoinController',
-		'FrameworkListener:' : 'FrameworkListener',
-		'NetworkStatsRecorder:' : 'NetworkStatsRecorder',
-		'DatabaseProcessor:' : 'DatabaseProcessor',
-		'NetworkPolicy:' : 'NetworkPolicy',
-		'LocationService:' : 'LocationService',
-		'GPSDatabase:' : 'GPSDatabase',
-		'Firebase:' : 'Firebase',
-		'PhoneInterfaceManager:' : 'PhoneInterfaceManager',
-		'wifi2agps:' : 'wifi2agps',
-		'Netd' : 'Netd',
-		'NetdConnector:' : 'NetdConnector',
-		'NetworkManagement:' : 'NetworkManagement',
-		'WifiNotificationController:' : 'WifiNotificationController',
-		'AdaptiveDiscoveryWorker:' : 'AdaptiveDiscoveryWorker',
-		'BatteryService:' : 'BatteryService',
-		'Authzen' : 'Authzen',
-		'SettingsProvider:' : 'SettingsProvider',
-		'Telecom' : 'Telecom',
-		'Watchdog:' : 'Watchdog',
-		'WindowStateAnimator:' : 'WindowStateAnimator',
-		'MediaPlayerService:' : 'MediaPlayerService',
-		'ProcessCpuTracker:' : 'ProcessCpuTracker',
-		'WallpaperService:' : 'WallpaperService',
-		'ImageWallpaper:' : 'ImageWallpaper',
-		'DHCPv6' : 'DHCPv6',
-		'View' : 'View',
-		'ContactsProvider:' : 'ContactsProvider',
-		'GraphicsStats:' : 'GraphicsStats',
-		'LatinIME:LogUtils:' : 'LatinIME:LogUtils',
-		'CastDatabase:' : 'CastDatabase',
-		'SQLiteCastStore:' : 'SQLiteCastStore',
-		'WorkSourceUtil:' : 'WorkSourceUtil',
-		'MPlugin' : 'MPlugin',
-		'PrimesInit:' : 'PrimesInit',
-		'Primes' : 'Primes',
-		'PrimesTesting:' : 'PrimesTesting',
-		'DisplayManagerService:' : 'DisplayManagerService',
-		'MtkOmxVenc:' : 'MtkOmxVenc',
-		'VDO_LOG' : 'VDO_LOG',
-		'ACodec' : 'ACodec',
-		'MtkOmxCore:' : 'MtkOmxCore',
-		'OMXNodeInstance:' :'OMXNodeInstance'
-	}
+	dictionary = logDictionary.dictionary
 
-	
+	#get the current activity
 	activityOutput = check_output(['adb', 'shell', 'dumpsys', 'window', 'windows', '|', 'grep', '-E', "'mCurrentFocus'" ]).decode('ISO-8859-1')
-
-
-
 	activitySplitted = activityOutput.split(' ')
 	activityName = activitySplitted[len(activitySplitted)-1].replace('}','')
 
+	if('null' in activityName):
+		focusedApp = check_output(['adb', 'shell', 'dumpsys', 'window', '|', 'grep', '-E', "'mFocusedApp'" ]).decode('ISO-8859-1')
+		focusedSplitted = focusedApp.split('=')[1].split(' ')
+		mFocusedApp = focusedSplitted[len(focusedSplitted)-4]
+		activityName = mFocusedApp
+
+	#get the number of the process of the given package
 	commandProcess = 'adb shell ps | grep ' + package
 	processNumber = os.popen(commandProcess).read().split()[1]
+
+	#get the logcat filtered by the process number
 	ans = check_output(['adb', 'logcat', '-d','|', 'grep', '-F', processNumber]).decode('ISO-8859-1')
 	logcatProcess = ans.split('\n')
 
+	#check if the line of the logcat has any tag of the dictionary
+	#if it is in the dictionary, the log is a system log not a developer log
 	for i in range(0, len(logcatProcess)):
 		line = logcatProcess[i]
 
@@ -345,12 +217,16 @@ def getLogcat(package):
 						filteredLogcat.append(line)
 						filteredActivity.append(activityName)
 
+	
+	#check if the current activity is a crash, if it has, stop the app and start it again
 	if('Application Error:' in activityOutput):
 		#ENCONTRO EL ERROR, AHORA REINICIE
 		return stopStart(package)
 
 	return 'OK'
 
+#Displays the logcat as a table with the timestamp, priority, current activity and message.
+#It return an html with the table.
 def displayLogcatTable(package):
 
 	global filteredLogcat
@@ -396,6 +272,9 @@ def displayLogcatTable(package):
 
 	return strHtml
 
+################### helper methods ###################
+
+#Stops and starts an app when a crash is detected using ADB commands
 def stopStart(packageStop):
 	adb = 'adb shell am force-stop ' + packageStop
 	b = subprocess.Popen(adb, stdout=subprocess.PIPE, shell=True)
@@ -407,7 +286,7 @@ def stopStart(packageStop):
 
 	return 'CRASH'
 
-
+#Clears the logcat using ADB Commands
 def clearLogcat():
 	adb = 'adb logcat -c'
 	b = subprocess.Popen(adb, stdout=subprocess.PIPE, shell=True)
@@ -415,6 +294,7 @@ def clearLogcat():
 
 	return 'Logcat cleared'
 
+#Clears info saved on server
 def clearVar():
 
 	global filteredLogcat
