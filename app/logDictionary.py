@@ -205,5 +205,20 @@ dictionary = {
 	'AudioTrackCenter:' : 'AudioTrackCenter',
 	'AudioTrack:' : 'AudioTrack',
 	'KeyguardDisplayManager:' : 'KeyguardDisplayManager',
-	'WebView' : 'WebView'
+	'WebView' : 'WebView',
+	'Ethernet:' : 'Ethernet',
+	'WIFI_UT' : 'WIFI_UT',
+	'WIFI' : 'WIFI',
+	'BgTaskExecutorImpl:' : 'BgTaskExecutorImpl',
+	'MDH' : 'MDH',
+	'SearchServiceCore:' : 'SearchServiceCore',
+	'cr_CronetUrlRequestContext:' : 'cr_CronetUrlRequestContext',
+	'MdhYoutubeWorker:' : 'MdhYoutubeWorker',
+	'CastMediaRouteProvider:' : 'CastMediaRouteProvider',
+	'DiscoveryManager:' : 'DiscoveryManager',
+	'DeviceScanner:' : 'DeviceScanner',
+	'MediaRouter:' : 'MediaRouter',
+	'YT.MDX.DiscoveryControl:' : 'YT.MDX.DiscoveryControl',
+	'Auth' : 'Auth',
+	'Conscrypt:' : 'Conscrypt'
 }

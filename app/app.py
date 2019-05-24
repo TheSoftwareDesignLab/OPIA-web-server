@@ -24,9 +24,6 @@ db = firestore.client()
 packageSelected = ''
 packageLogcat = ''
 
-filteredLogcat = []
-filteredActivity = []
-
 ################### routes ###################
 
 @app.route('/')
@@ -45,28 +42,24 @@ def show_databases(id, package):
 
 #read the shared preferences of a given package
 @app.route('/sp/<id>/<package>')
-def get_sp(id,package):
+def get_sp(id, package):
 	return displaySharedPreferences(id, package)
 
 #read the logcat of the given package
-@app.route('/log/<package>')
-def get_logcat(package):
-	return getLogcat(package)
+@app.route('/log/<id>/<execution>/<package>')
+def get_logcat(id, execution, package):
+	return getLogcat(id, execution, package)
 
 #display the logcat of the given package
-@app.route('/logcat/<package>')
-def show_logcat(package):
-	return displayLogcatTable(package)
+@app.route('/logcat/<id>/<execution>/<package>')
+def show_logcat(id, execution, package):
+	return displayLogcatTable(id, execution, package)
 
 #clear the logcat on the device
 @app.route('/clear/')
 def clear():
 	return clearLogcat()
 
-#clear the variables on the server
-@app.route('/clearvar/')
-def clear_var():
-	return clearVar()
 
 ################### database methods ###################
 
@@ -258,15 +251,16 @@ def displaySharedPreferences(id, package):
 
 # Gets the logcat and filters it by the package given. Also it filters the logcat with a dictionary to leave only developer's logs
 # It returns OK if the logcat was extracted successfully and CRASH if the app crashed.
-def getLogcat(package):
+def getLogcat(id, execution, package):
 
-	global packageLogcat
-	global filteredLogcat
-	global filteredActivity
-	if(package != packageLogcat):
-		filteredLogcat = []
-		filteredActivity = []
-		packageLogcat = package
+	device_ref = db.collection(u''+id).document(u''+execution)
+	log = device_ref.get().to_dict()
+
+	if('log' in log): #if it exists append to it the new lines
+		log = log['log']
+	else: #if it is None creates a new list 
+		log = []
+
 
 	dictionary = logDictionary.dictionary
 
@@ -293,6 +287,7 @@ def getLogcat(package):
 	#if it is in the dictionary, the log is a system log not a developer log
 	for i in range(0, len(logcatProcess)):
 		line = logcatProcess[i]
+		fullLine = line+'$$$'+activityName
 
 		current = line.split()
 
@@ -300,10 +295,9 @@ def getLogcat(package):
 
 			tag = current[5]			
 			if(dictionary.get(tag) == None):
-				if(line not in filteredLogcat):
+				if(fullLine not in log):
 					if('[OkHttp]' not in line and '[CDS]' not in line): 
-						filteredLogcat.append(line)
-						filteredActivity.append(activityName)
+						log.append(fullLine)
 
 	
 	#check if the current activity is a crash, if it has, stop the app and start it again
@@ -311,47 +305,56 @@ def getLogcat(package):
 		#ENCONTRO EL ERROR, AHORA REINICIE
 		return stopStart(package)
 
+	device_ref.update({
+    	u'log': log
+	})
+
 	return 'OK'
 
 #Displays the logcat as a table with the timestamp, priority, current activity and message.
 #It return an html with the table.
-def displayLogcatTable(package):
+def displayLogcatTable(id, execution, package):
 
-	global filteredLogcat
-	global filteredActivity
+	device_ref = db.collection(u''+id).document(u''+execution)
+	log = device_ref.get().to_dict()
 
-	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Logcat</h2>'
+	if('log' in log): #if it exists get all the list
+		log = log['log']
+	else: #if it is None creates a new list 
+		log = []
+
+	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Logcat '+package+'</h2>'
 	strHtml = strHtml + '<table id="logs"><tr><th>Date</th><th>Priority</th><th>Activity</th><th>Message</th></tr>'
 
-	if(packageLogcat == package): 
+	for i in range(0, len(log)):
 
-		for i in range(0, len(filteredLogcat)):
+		logLine = log[i].split('$$$')
+		filteredLogcat = logLine[0]
 
-			if('AndroidRuntime' in filteredLogcat[i]):
-				strHtml = strHtml + '<tr class="errorFile">'
-			else:
-				strHtml = strHtml + '<tr>'
+		if('AndroidRuntime' in filteredLogcat):
+			strHtml = strHtml + '<tr class="errorFile">'
+		else:
+			strHtml = strHtml + '<tr>'
 			
-			currentLine = filteredLogcat[i]
-			splitted = currentLine.split()
+		splitted = filteredLogcat.split()
 
-			strHtml = strHtml + '<td>'
-			strHtml = strHtml + splitted[0] + ' ' + splitted[1]
-			strHtml = strHtml + '</td>'
+		strHtml = strHtml + '<td>'
+		strHtml = strHtml + splitted[0] + ' ' + splitted[1]
+		strHtml = strHtml + '</td>'
 
-			strHtml = strHtml + '<td>'
-			strHtml = strHtml + splitted[4] 
-			strHtml = strHtml + '</td>'
+		strHtml = strHtml + '<td>'
+		strHtml = strHtml + splitted[4] 
+		strHtml = strHtml + '</td>'
 
-			strHtml = strHtml + '<td>'
-			strHtml = strHtml + filteredActivity[i]
-			strHtml = strHtml + '</td>'
+		strHtml = strHtml + '<td>'
+		strHtml = strHtml + logLine[1]
+		strHtml = strHtml + '</td>'
 
-			strHtml = strHtml + '<td>'
-			strHtml = strHtml + ' '.join(splitted[5:]) 
-			strHtml = strHtml + '</td>'
+		strHtml = strHtml + '<td>'
+		strHtml = strHtml + ' '.join(splitted[5:]) 
+		strHtml = strHtml + '</td>'
 
-			strHtml = strHtml + '</tr>'
+		strHtml = strHtml + '</tr>'
 
 	strHtml = strHtml + '</table></body></html>'
 
@@ -382,16 +385,6 @@ def clearLogcat():
 
 	return 'Logcat cleared'
 
-#Clears info saved on server
-def clearVar():
-
-	global filteredLogcat
-	global filteredActivity
-
-	filteredLogcat = []
-	filteredActivity = []
-
-	return 'Cleared'
 
 
 if __name__ == '__main__':
