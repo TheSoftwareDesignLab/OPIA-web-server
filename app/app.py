@@ -4,16 +4,22 @@ import time
 import json
 import subprocess
 import logDictionary
+import xml.etree.ElementTree as ET 
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 from subprocess import check_output
 
 app = Flask(__name__)
 
-################### variables ###################
 
-allDatabases = []
-allTables = []
-infoTables = []
-schemasTables = []
+# Use a service account
+cred = credentials.Certificate('/Users/lanabeji/Downloads/opia-d284c-firebase-adminsdk-pm5ax-d2e68d57fa.json')
+firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+################### variables ###################
 
 packageSelected = ''
 packageLogcat = ''
@@ -28,14 +34,19 @@ def main():
     return render_template('home.html')
 
 #read the databases of a given package
-@app.route('/app/<package>')
-def show_package(package):
-	return readDatabases(package)
+@app.route('/app/<id>/<package>')
+def show_package(id, package):
+	return readDatabases(id, package)
 
 #display the databases of the package
-@app.route('/databases/<package>')
-def show_databases(package):
-	return displayData()
+@app.route('/databases/<id>/<package>')
+def show_databases(id, package):
+	return displayData(id, package)
+
+#read the shared preferences of a given package
+@app.route('/sp/<id>/<package>')
+def get_sp(id,package):
+	return displaySharedPreferences(id, package)
 
 #read the logcat of the given package
 @app.route('/log/<package>')
@@ -75,18 +86,15 @@ def filterDatabases(databases):
 
 # Gets the databases from the device by creating a backup. 
 # It returns a list of tables but saves also the data from the tables.
-def readDatabases(packageName):
-
-	global allDatabases
-	global allTables
-	global infoTables
+def readDatabases(id, packageName):
 
 	allDatabases = []
 	allTables = []
-	infoTables = []
 
 	packageSelected = packageName
 	print(packageSelected)
+
+	doc_ref = db.collection(u''+id).document(u''+packageName)
 
 	#getting backup from app on device
 	b = subprocess.Popen('adb backup -noapk ' + packageName, stdout=subprocess.PIPE, shell=True)
@@ -125,10 +133,17 @@ def readDatabases(packageName):
 		allDatabases.extend(a)
 		allTables.extend(tables)
 
-	print(allTables)
+	tablesFirestore = []
 	for i in range(0, len(allTables)):
 		#gets all the information stored on each table
-		readTable(allTables[i], allDatabases[i], path)
+		tablesFirestore.append(readTable(allTables[i], allDatabases[i], path))
+
+	spDict = getSharedPreferences(packageName)
+
+	doc_ref.set({
+    	u'tables': tablesFirestore,
+    	u'sharedpreferences' : spDict
+	})
 
 	return json.dumps(allTables)
 
@@ -141,30 +156,103 @@ def readTable(tableName, databaseName, path):
 	tableSelect = ' "select * from '+ tableName+';"'
 	tableCommand = 'sqlite3 ' + path+databaseName + headers + mode + tableSelect
 	tableContent = os.popen(tableCommand).read()
-	infoTables.append(tableContent)
+
+	table = tableName + '$$$' + tableContent
+
+	return table 
 
 #Creates an html file with all the tables and its information.
 #Returns the html 
-def displayData():
+def displayData(id, package):
 
 	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Tables</h2>'
 
-	global allTables
-	print(allTables)
-	for i in range(0, len(allTables)):
+	device_ref = db.collection(u''+id).document(u''+package)
+	tables = device_ref.get().to_dict()['tables']
 
-		strName = '<h3>'+allTables[i]+'</h3>'
-		strTable = strName+'<table id="tables">' + infoTables[i]
-		strHtml = strHtml+strTable+'</table>'
+	for i in range(0, len(tables)):
+
+		tableInfo = tables[i].split('$$$')
+
+		if(tableInfo[1] != ''):
+			strName = '<h3>'+tableInfo[0]+'</h3>'
+			strTable = strName+'<table id="tables">' + tableInfo[1]
+			strHtml = strHtml+strTable+'</table>'
 
 	strHtml = strHtml + '</body></html>'
 
-	hs = open('templates/HTMLTable.html', 'w')
-	hs.write(strHtml)
+	return strHtml
 
-	allTables = []
+################### shared preferences methods ###################
+
+#return shared preferences from the phone 
+def getSharedPreferences(package):
+
+	path = 'apps/'+package+'/sp/'
+
+	#get shared preferences files
+	ans = os.popen('ls '+path).read()
+
+	#list shared preferences files
+	arr = ans.split()
+
+	spDict = {}
+
+	for i in range(0, len(arr)):
+
+		spName = arr[i]
+		tree = ET.parse(path+spName)  
+		root = tree.getroot()
+
+		spRows = []
+
+		for elem in root:
+
+			tag = elem.tag
+			name = elem.attrib['name']
+			value = ''
+
+			if(tag != 'string'):
+				value = elem.attrib['value']
+			else:
+				value = elem.text
+
+			current = tag + '$$$' + name + '$$$' + value
+
+			spRows.append(current)
+
+		spDict[spName] = spRows
+
+	return spDict
+
+#retrieve shared preferences from firebase and shows them as tables
+def displaySharedPreferences(id, package):
+
+	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Shared Preferences</h2>'
+
+	device_ref = db.collection(u''+id).document(u''+package)
+	sharedpreferences = device_ref.get().to_dict()['sharedpreferences'] 
+
+	for key,value in sharedpreferences.items():
+
+		if(len(value) > 0):
+
+			strName = '<h3>'+key+'</h3>'
+			strTable = strName + '<table id="tables"><tr><th>Type</th><th>Key</th><th>Value</th></tr>'
+
+			for i in range(0, len(value)):
+				current = value[i].split('$$$')
+
+				strTable = strTable + '<tr><td>' + current[0] + '</td>'
+				strTable = strTable + '<td>' + current[1] + '</td>'
+				strTable = strTable + '<td>' + current[2] + '</td></tr>'
+
+			strHtml = strHtml+strTable+'</table>'
+
+	strHtml = strHtml + '</body></html>'
 
 	return strHtml
+
 
 ################### logcat methods ###################
 
