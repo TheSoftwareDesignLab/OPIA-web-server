@@ -13,7 +13,8 @@ from subprocess import check_output
 app = Flask(__name__)
 
 
-# Use a service account
+################### firebase connection ###################
+
 cred = credentials.Certificate('/Users/lanabeji/Downloads/opia-d284c-firebase-adminsdk-pm5ax-d2e68d57fa.json')
 firebase_admin.initialize_app(cred)
 
@@ -30,32 +31,32 @@ packageLogcat = ''
 def main():
     return render_template('home.html')
 
-#read the databases of a given package
+#read the databases of a given package and device
 @app.route('/app/<id>/<package>')
 def show_package(id, package):
 	return readDatabases(id, package)
 
-#display the databases of the package
+#display the databases of the package and device
 @app.route('/databases/<id>/<package>')
 def show_databases(id, package):
 	return displayData(id, package)
 
-#read the shared preferences of a given package
+#read the shared preferences of a given package and device
 @app.route('/sp/<id>/<package>')
 def get_sp(id, package):
 	return displaySharedPreferences(id, package)
 
-#read the logcat of the given package
+#read the logcat of the given package, device and specific execution
 @app.route('/log/<id>/<execution>/<package>')
 def get_logcat(id, execution, package):
 	return getLogcat(id, execution, package)
 
-#display the logcat of the given package
+#display the logcat of the given package, device and specific execution
 @app.route('/logcat/<id>/<execution>/<package>')
 def show_logcat(id, execution, package):
 	return displayLogcatTable(id, execution, package)
 
-#clear the logcat on the device
+#clear the logcat on the device connected
 @app.route('/clear/')
 def clear():
 	return clearLogcat()
@@ -78,7 +79,7 @@ def filterDatabases(databases):
 	return newDatabases
 
 # Gets the databases from the device by creating a backup. 
-# It returns a list of tables but saves also the data from the tables.
+# It returns a list of tables but saves also the data from the tables and shared preferences
 def readDatabases(id, packageName):
 
 	allDatabases = []
@@ -158,7 +159,7 @@ def readTable(tableName, databaseName, path):
 #Returns the html 
 def displayData(id, package):
 
-	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Tables</h2>'
+	strHtml = '<html><meta name="viewport" content="width=device-width, initial-scale=1.0"><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Tables</h2>'
 
 	device_ref = db.collection(u''+id).document(u''+package)
 	tables = device_ref.get().to_dict()['tables']
@@ -221,7 +222,7 @@ def getSharedPreferences(package):
 #retrieve shared preferences from firebase and shows them as tables
 def displaySharedPreferences(id, package):
 
-	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Shared Preferences</h2>'
+	strHtml = '<html><meta name="viewport" content="width=device-width, initial-scale=1.0"><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Shared Preferences</h2>'
 
 	device_ref = db.collection(u''+id).document(u''+package)
 	sharedpreferences = device_ref.get().to_dict()['sharedpreferences'] 
@@ -256,11 +257,16 @@ def getLogcat(id, execution, package):
 	device_ref = db.collection(u''+id).document(u''+execution)
 	log = device_ref.get().to_dict()
 
-	if('log' in log): #if it exists append to it the new lines
-		log = log['log']
+	logAlone = []
+
+	if(log != None):
+		if('log' in log): #if it exists append to it the new lines
+			logAlone = log['logAlone']
+			log = log['log']
+		else:
+			log = []
 	else: #if it is None creates a new list 
 		log = []
-
 
 	dictionary = logDictionary.dictionary
 
@@ -295,8 +301,9 @@ def getLogcat(id, execution, package):
 
 			tag = current[5]			
 			if(dictionary.get(tag) == None):
-				if(fullLine not in log):
-					if('[OkHttp]' not in line and '[CDS]' not in line): 
+				if(line not in logAlone):
+					if('[OkHttp]' not in line and '[CDS]' not in line and '[socket]' not in line): 
+						logAlone.append(line)
 						log.append(fullLine)
 
 	
@@ -306,7 +313,8 @@ def getLogcat(id, execution, package):
 		return stopStart(package)
 
 	device_ref.update({
-    	u'log': log
+    	u'log': log,
+    	u'logAlone' : logAlone
 	})
 
 	return 'OK'
@@ -318,12 +326,15 @@ def displayLogcatTable(id, execution, package):
 	device_ref = db.collection(u''+id).document(u''+execution)
 	log = device_ref.get().to_dict()
 
-	if('log' in log): #if it exists get all the list
-		log = log['log']
+	if(log != None):
+		if('log' in log): #if it exists append to it the new lines
+			log = log['log']
+		else:
+			log = []
 	else: #if it is None creates a new list 
 		log = []
 
-	strHtml = '<html><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Logcat '+package+'</h2>'
+	strHtml = '<html><meta name="viewport" content="width=device-width, initial-scale=1.0"><head><title>Opia</title><link href="/static/css/template.css" rel="stylesheet"></head><body><h2>Logcat '+package+'</h2>'
 	strHtml = strHtml + '<table id="logs"><tr><th>Date</th><th>Priority</th><th>Activity</th><th>Message</th></tr>'
 
 	for i in range(0, len(log)):
@@ -357,9 +368,6 @@ def displayLogcatTable(id, execution, package):
 		strHtml = strHtml + '</tr>'
 
 	strHtml = strHtml + '</table></body></html>'
-
-	hs = open('templates/HTMLLog.html', 'w')
-	hs.write(strHtml)
 
 	return strHtml
 

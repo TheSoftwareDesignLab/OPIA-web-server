@@ -11,6 +11,10 @@ h2, h3, h1, p{
 #tables td, #tables th, #logs td, #logs th {
   border: 1px solid #ddd;
   padding: 8px;
+  white-space:pre-line;
+  word-wrap: break-word;
+  table-layout: auto;
+  height: auto;
 }
 
 #tables tr:nth-child(even){background-color: #f2f2f2;}
@@ -25,8 +29,17 @@ h2, h3, h1, p{
   text-align: left;
   background-color: #006494;
   color: white;
+  white-space:pre-line;
+  word-wrap: break-word;
+  table-layout: auto;
+  height: auto;
 }
 
 .errorFile {
   background-color: #ED7B7D
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
 }
