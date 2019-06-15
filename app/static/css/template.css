@@ -38,8 +38,3 @@ h2, h3, h1, p{
 .errorFile {
   background-color: #ED7B7D
 }
-
-html, body {
-  max-width: 100%;
-  overflow-x: hidden;
-}

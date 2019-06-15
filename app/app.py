@@ -70,10 +70,11 @@ def filterDatabases(databases):
 	newDatabases = []
 
 	termination = 'db'
+	terminationJournal = '-journal'
 	for i in range(0, len(databases)):
 		database = databases[i]
 
-		if(database.endswith(termination)):
+		if(not database.endswith(terminationJournal)):
 			newDatabases.append(database)
 
 	return newDatabases
@@ -112,6 +113,7 @@ def readDatabases(id, packageName):
 
 	#gets databases not journals
 	filteredDatabases = filterDatabases(arr)
+	print(filteredDatabases)
 
 	#gets tables from all databases
 
@@ -127,10 +129,12 @@ def readDatabases(id, packageName):
 		allDatabases.extend(a)
 		allTables.extend(tables)
 
+
 	tablesFirestore = []
 	for i in range(0, len(allTables)):
 		#gets all the information stored on each table
-		tablesFirestore.append(readTable(allTables[i], allDatabases[i], path))
+		if(allTables[i] != 'android_metadata' and allTables[i] != 'room_master_table'):
+			tablesFirestore.append(readTable(allTables[i], allDatabases[i], path))
 
 	spDict = getSharedPreferences(packageName)
 
@@ -149,7 +153,11 @@ def readTable(tableName, databaseName, path):
 	mode = ' ".mode html"'
 	tableSelect = ' "select * from '+ tableName+';"'
 	tableCommand = 'sqlite3 ' + path+databaseName + headers + mode + tableSelect
-	tableContent = os.popen(tableCommand).read()
+
+	try: 
+		tableContent = os.popen(tableCommand).read()
+	except:
+		tableContent = ''
 
 	table = tableName + '$$$' + tableContent
 
@@ -206,10 +214,16 @@ def getSharedPreferences(package):
 			name = elem.attrib['name']
 			value = ''
 
-			if(tag != 'string'):
-				value = elem.attrib['value']
-			else:
+			if(tag == 'string'):
 				value = elem.text
+				
+			elif(tag == 'set'):
+				value = ''
+			else:
+				value = elem.attrib['value']
+
+			if value == None :
+				value = ''
 
 			current = tag + '$$$' + name + '$$$' + value
 
